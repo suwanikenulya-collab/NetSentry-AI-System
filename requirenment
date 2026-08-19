@@ -1,0 +1,172 @@
+# NetSentry AI — Requirements Document
+
+## Document Status
+
+These are the initial project requirements identified during the
+planning stage. They may be updated after user feedback, UI testing
+and technical evaluation.
+
+## 1. Project Purpose
+
+NetSentry AI is a web-based network-security monitoring platform
+designed to help users identify and investigate suspicious activity
+within uploaded network-traffic data.
+
+The system will analyse network-flow records using security rules and
+a machine-learning anomaly-detection model. It will present the results
+through dashboards, traffic records and prioritized security alerts.
+
+## 2. Target Users
+
+### 2.1 Security Analyst
+
+The Security Analyst monitors network activity and investigates
+potential security incidents.
+
+The analyst needs to:
+
+- View network-traffic summaries.
+- Upload network datasets.
+- Search and filter traffic records.
+- View suspicious network activity.
+- Understand why alerts were generated.
+- Investigate security alerts.
+- Add investigation notes.
+- Update alert statuses.
+- Mark incorrect alerts as false positives.
+- Generate incident reports.
+
+### 2.2 System Administrator
+
+The System Administrator manages the platform and its authorized users.
+
+The administrator needs to:
+
+- Manage analyst accounts.
+- Assign user roles.
+- Activate or deactivate accounts.
+- Upload and manage datasets.
+- View system activity.
+- View audit logs.
+- Configure basic system settings.
+
+
+## 3. Project Scope
+
+The first version of NetSentry AI will support the analysis of
+uploaded network-traffic CSV files.
+
+The system will:
+
+- Provide secure user authentication.
+- Support Administrator and Security Analyst roles.
+- Validate uploaded CSV files.
+- Display network-traffic records.
+- Detect potentially anomalous records.
+- Generate prioritized security alerts.
+- Support alert investigation.
+- Generate basic security reports.
+- Record important user actions.
+
+## 4. Functional Requirements
+
+### Authentication and Authorization
+
+- **FR-01:** The system shall allow authorized users to log in.
+- **FR-02:** The system shall allow users to log out.
+- **FR-03:** The system shall restrict protected pages to authenticated users.
+- **FR-04:** The system shall control access based on user roles.
+
+### Dataset Management
+
+- **FR-05:** The system shall allow authorized users to upload CSV network datasets.
+- **FR-06:** The system shall validate uploaded file types and required columns.
+- **FR-07:** The system shall display understandable validation errors.
+- **FR-08:** The system shall maintain a history of uploaded datasets.
+
+### Traffic Analysis
+
+- **FR-09:** The system shall display network-traffic records.
+- **FR-10:** Users shall search and filter traffic records.
+- **FR-11:** The system shall preprocess uploaded network data.
+- **FR-12:** The system shall calculate anomaly scores for analysed records.
+- **FR-13:** The system shall classify records as normal or potentially suspicious.
+
+### Dashboard
+
+- **FR-14:** The system shall display a summary of analysed network activity.
+- **FR-15:** The dashboard shall display normal and suspicious record counts.
+- **FR-16:** The dashboard shall display alert statistics and visualizations.
+- **FR-17:** The dashboard shall display recent security alerts.
+
+### Security Alerts
+
+- **FR-18:** The system shall generate alerts for potentially suspicious records.
+- **FR-19:** The system shall assign a severity level to each alert.
+- **FR-20:** Users shall view detailed alert information.
+- **FR-21:** The system shall provide a basic explanation for generated alerts.
+- **FR-22:** Analysts shall update alert investigation statuses.
+- **FR-23:** Analysts shall add investigation notes.
+- **FR-24:** Analysts shall mark alerts as resolved or false positives.
+
+### Reporting
+
+- **FR-25:** Users shall generate a basic security-incident report.
+- **FR-26:** Users shall filter reports using date, severity and status.
+- **FR-27:** Users shall export report information as PDF or CSV.
+
+### Administration
+
+- **FR-28:** Administrators shall create analyst accounts.
+- **FR-29:** Administrators shall assign user roles.
+- **FR-30:** Administrators shall activate or deactivate accounts.
+- **FR-31:** Administrators shall view important activities through an audit log.
+
+## 5. Non-Functional Requirements
+
+- **NFR-01 — Usability:** The interface should be understandable to junior security analysts.
+- **NFR-02 — Performance:** Common pages should load within three seconds under normal test conditions.
+- **NFR-03 — Security:** Passwords must be stored using secure password hashing.
+- **NFR-04 — Authorization:** Protected operations must require appropriate permissions.
+- **NFR-05 — Validation:** The system must validate user input and uploaded files.
+- **NFR-06 — Accessibility:** The interface should use readable text and accessible colour contrast.
+- **NFR-07 — Responsiveness:** The interface should support desktop and tablet screen sizes.
+- **NFR-08 — Auditability:** Important user actions must be recorded.
+- **NFR-09 — Maintainability:** The frontend, backend and ML modules should be organized separately.
+- **NFR-10 — Privacy:** Sensitive information and credentials must not be stored in the source code.
+
+## 6. Out of Scope
+
+The first version will not include:
+
+- Continuous live packet capture
+- Monitoring public or university networks
+- Automatic attack prevention
+- Automatic IP blocking
+- Real malware execution
+- A mobile application
+- Multiple cloud-provider integrations
+- An advanced AI chatbot
+- Enterprise-scale real-time monitoring
+
+## 7. Main System Workflow
+
+1. An authorized user logs in.
+2. The user uploads a supported network-traffic CSV file.
+3. The system validates and preprocesses the dataset.
+4. The system analyses the network records.
+5. The ML model calculates anomaly scores.
+6. Potentially suspicious records generate security alerts.
+7. An analyst investigates the alerts.
+8. The analyst resolves alerts or marks them as false positives.
+9. The user generates a security report.
+
+## 8. Requirement Validation
+
+These initial requirements will be reviewed using:
+
+- Feedback from cybersecurity and networking students
+- Feedback from an IT or cybersecurity lecturer, if available
+- Evaluation of similar network-security platforms
+- Usability testing of the Figma prototype
+- Technical testing during implementation
