@@ -1,0 +1,15 @@
+# Python virtual environment
+.venv/
+
+# Python-generated cache files
+__pycache__/
+*.py[cod]
+
+# Testing cache
+.pytest_cache/
+
+# Local secrets and environment variables
+.env
+
+# Uploaded datasets
+uploads/
