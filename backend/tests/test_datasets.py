@@ -102,3 +102,6 @@ def test_empty_csv_is_rejected() -> None:
     assert response_body["is_valid"] is False
     assert response_body["row_count"] == 0
     assert response_body["message"] == "The CSV file is empty."
+
+    #git diff --cached- this code will show only staged changes 
+    #this file contains unit tests for the dataset validation endpoint. It tests various scenarios, including valid CSV files, CSV files with missing columns, non-CSV files, and empty CSV files. Each test sends a POST request to the `/api/v1/datasets/validate` endpoint and asserts the expected response status code and JSON content.
