@@ -83,6 +83,21 @@ Manages user accounts, roles, datasets, settings and audit logs.
 - Python
 - FastAPI
 
+### Running the backend locally
+
+From the `backend` folder, install dependencies (prefer a virtualenv) and run the dev server with Uvicorn:
+
+```bash
+cd backend
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --reload
+```
+
+On Windows you can also run the provided scripts in the `backend` folder:
+
+- `run_dev.bat` — double-click or run in shell
+- `run_dev.ps1` — PowerShell script
+
 ### Database
 
 - PostgreSQL

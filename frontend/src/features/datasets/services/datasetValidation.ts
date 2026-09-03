@@ -1,4 +1,6 @@
 import type {
+  DatasetServerValidationResult,
+  DatasetValidationApiResponse,
   DatasetValidationResult,
 } from "../types/dataset.types";
 
@@ -64,6 +66,51 @@ export async function validateDatasetFile(
     detectedColumns,
     missingColumns: [...missingColumns],
   };
+}
+
+export async function validateDatasetOnServer(
+  file: File,
+): Promise<DatasetServerValidationResult> {
+  const formData = new FormData();
+
+  formData.append("file", file, file.name);
+
+  try {
+    const response = await fetch(
+      "/api/v1/datasets/validate",
+      {
+        method: "POST",
+        body: formData,
+      },
+    );
+
+    if (!response.ok) {
+      const errorMessage =
+        await readApiErrorMessage(response);
+
+      throw new DatasetValidationError(errorMessage);
+    }
+
+    const apiResponse =
+      (await response.json()) as DatasetValidationApiResponse;
+
+    return {
+      filename: apiResponse.filename,
+      isValid: apiResponse.is_valid,
+      rowCount: apiResponse.row_count,
+      detectedColumns: apiResponse.detected_columns,
+      missingColumns: apiResponse.missing_columns,
+      message: apiResponse.message,
+    };
+  } catch (error) {
+    if (error instanceof DatasetValidationError) {
+      throw error;
+    }
+
+    throw new DatasetValidationError(
+      "Unable to connect to the dataset validation server.",
+    );
+  }
 }
 
 function validateFileProperties(file: File) {
@@ -133,4 +180,21 @@ function parseCsvHeader(headerLine: string) {
 
 function normalizeColumn(column: string) {
   return column.trim().toLowerCase();
+}
+async function readApiErrorMessage(
+  response: Response,
+): Promise<string> {
+  try {
+    const errorBody =
+      (await response.json()) as {
+        detail?: string;
+      };
+
+    return (
+      errorBody.detail ??
+      `Dataset validation failed with status ${response.status}.`
+    );
+  } catch {
+    return `Dataset validation failed with status ${response.status}.`;
+  }
 }
