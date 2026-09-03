@@ -1,5 +1,4 @@
 import {
-  CheckCircle2,
   CircleAlert,
   FileSpreadsheet,
   UploadCloud,
@@ -13,8 +12,13 @@ import {
 } from "react";
 
 import { Button } from "../../../components/ui/Button";
-import { validateDatasetFile } from "../services/datasetValidation";
+import { DatasetValidationResultCard } from "../components/DatasetValidationResultCard";
+import {
+  validateDatasetFile,
+  validateDatasetOnServer,
+} from "../services/datasetValidation";
 import type {
+  DatasetServerValidationResult,
   DatasetValidationResult,
   DatasetValidationStatus,
 } from "../types/dataset.types";
@@ -36,11 +40,18 @@ function formatFileSize(bytes: number): string {
 export function UploadDatasetPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFile, setSelectedFile] =
+    useState<File | null>(null);
+
   const [status, setStatus] =
     useState<DatasetValidationStatus>("idle");
+
   const [validationResult, setValidationResult] =
     useState<DatasetValidationResult | null>(null);
+
+  const [serverResult, setServerResult] =
+    useState<DatasetServerValidationResult | null>(null);
+
   const [errorMessage, setErrorMessage] = useState("");
   const [isDragging, setIsDragging] = useState(false);
 
@@ -48,6 +59,7 @@ export function UploadDatasetPage() {
     setSelectedFile(file);
     setStatus("selected");
     setValidationResult(null);
+    setServerResult(null);
     setErrorMessage("");
   }
 
@@ -91,18 +103,37 @@ export function UploadDatasetPage() {
     setStatus("validating");
     setErrorMessage("");
     setValidationResult(null);
+    setServerResult(null);
 
     try {
-      const result = await validateDatasetFile(selectedFile);
+      /*
+       * Step 1: Perform quick validation in the browser.
+       * This catches obvious problems without contacting the backend.
+       */
+      const frontendResult =
+        await validateDatasetFile(selectedFile);
 
-      setValidationResult(result);
-      setStatus(result.isValid ? "valid" : "invalid");
+      setValidationResult(frontendResult);
 
-      if (!result.isValid) {
+      if (!frontendResult.isValid) {
+        setStatus("invalid");
         setErrorMessage(
           "The dataset is missing one or more required columns.",
         );
+        return;
       }
+
+      /*
+       * Step 2: Send the same file to FastAPI.
+       * The backend performs the trusted validation.
+       */
+      const backendResult =
+        await validateDatasetOnServer(selectedFile);
+
+      setServerResult(backendResult);
+      setStatus(
+        backendResult.isValid ? "valid" : "invalid",
+      );
     } catch (error) {
       const message =
         error instanceof Error
@@ -118,6 +149,7 @@ export function UploadDatasetPage() {
     setSelectedFile(null);
     setStatus("idle");
     setValidationResult(null);
+    setServerResult(null);
     setErrorMessage("");
 
     if (fileInputRef.current) {
@@ -137,9 +169,9 @@ export function UploadDatasetPage() {
         </h1>
 
         <p className="mt-2 max-w-3xl text-muted">
-          Upload a CSV containing network-flow records. NetSentry will
-          validate its structure before sending it to the analysis
-          service.
+          Upload a CSV containing network-flow records.
+          NetSentry will validate its structure before
+          analysis.
         </p>
       </header>
 
@@ -150,7 +182,8 @@ export function UploadDatasetPage() {
           </h2>
 
           <p className="mt-1 text-sm text-muted">
-            Drag and drop a file or select one from your computer.
+            Drag and drop a file or select one from your
+            computer.
           </p>
 
           <input
@@ -217,6 +250,7 @@ export function UploadDatasetPage() {
                 className="self-start rounded-lg p-2 text-muted transition hover:bg-surface-hover hover:text-foreground sm:self-auto"
                 onClick={clearFile}
                 aria-label="Remove selected file"
+                disabled={status === "validating"}
               >
                 <X className="h-5 w-5" />
               </button>
@@ -236,47 +270,31 @@ export function UploadDatasetPage() {
             </div>
           )}
 
-          {status === "valid" && (
-            <div className="mt-5 flex gap-3 rounded-xl border border-low/40 bg-low/10 p-4">
-              <CheckCircle2
-                className="h-5 w-5 shrink-0 text-low"
-                aria-hidden="true"
-              />
-
-              <div>
-                <p className="font-medium text-foreground">
-                  Dataset structure is valid
-                </p>
-
-                <p className="mt-1 text-sm text-muted">
-                  The file is ready to be uploaded when we connect the
-                  backend.
-                </p>
-              </div>
-            </div>
-          )}
-
           {validationResult &&
+            !serverResult &&
             validationResult.detectedColumns.length > 0 && (
               <div className="mt-5">
                 <h3 className="font-medium text-foreground">
-                  Detected columns
+                  Frontend-detected columns
                 </h3>
 
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {validationResult.detectedColumns.map((column) => (
-                    <span
-                      key={column}
-                      className="rounded-full border border-border bg-background px-3 py-1 text-xs text-muted"
-                    >
-                      {column}
-                    </span>
-                  ))}
+                  {validationResult.detectedColumns.map(
+                    (column) => (
+                      <span
+                        key={column}
+                        className="rounded-full border border-border bg-background px-3 py-1 text-xs text-muted"
+                      >
+                        {column}
+                      </span>
+                    ),
+                  )}
                 </div>
               </div>
             )}
 
           {validationResult &&
+            !serverResult &&
             validationResult.missingColumns.length > 0 && (
               <div className="mt-5">
                 <h3 className="font-medium text-critical">
@@ -284,17 +302,27 @@ export function UploadDatasetPage() {
                 </h3>
 
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {validationResult.missingColumns.map((column) => (
-                    <span
-                      key={column}
-                      className="rounded-full border border-critical/40 bg-critical/10 px-3 py-1 text-xs text-critical"
-                    >
-                      {column}
-                    </span>
-                  ))}
+                  {validationResult.missingColumns.map(
+                    (column) => (
+                      <span
+                        key={column}
+                        className="rounded-full border border-critical/40 bg-critical/10 px-3 py-1 text-xs text-critical"
+                      >
+                        {column}
+                      </span>
+                    ),
+                  )}
                 </div>
               </div>
             )}
+
+          {serverResult && (
+            <div className="mt-5">
+              <DatasetValidationResultCard
+                result={serverResult}
+              />
+            </div>
+          )}
 
           <div className="mt-6 flex flex-wrap gap-3">
             <Button
@@ -305,7 +333,7 @@ export function UploadDatasetPage() {
               }
             >
               {status === "validating"
-                ? "Validating..."
+                ? "Validating with server..."
                 : "Validate dataset"}
             </Button>
 
@@ -314,6 +342,7 @@ export function UploadDatasetPage() {
                 type="button"
                 variant="outline"
                 onClick={clearFile}
+                disabled={status === "validating"}
               >
                 Clear
               </Button>
@@ -329,6 +358,7 @@ export function UploadDatasetPage() {
           <ul className="mt-4 space-y-3 text-sm text-muted">
             <li>• CSV format only</li>
             <li>• Maximum file size: 50 MB</li>
+            <li>• UTF-8 text encoding</li>
             <li>• First row must contain column names</li>
             <li>• One network connection per row</li>
           </ul>
@@ -359,9 +389,9 @@ export function UploadDatasetPage() {
           </div>
 
           <p className="mt-6 text-xs leading-5 text-subtle">
-            This frontend validation checks the basic CSV structure.
-            The backend will later perform stricter security and data
-            validation.
+            The browser performs a quick initial check. The
+            FastAPI backend then repeats the validation using
+            trusted server-side code.
           </p>
         </aside>
       </section>
