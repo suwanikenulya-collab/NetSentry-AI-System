@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from app.api.routes.datasets import router as datasets_router
-
+from app.api.routes.traffic import router as traffic_router
 
 app = FastAPI(
     title="NetSentry AI API",
@@ -10,6 +10,7 @@ app = FastAPI(
 )
 
 app.include_router(datasets_router) #let main.py knows there is a dataset route 
+app.include_router(traffic_router) #let main.py knows there is a traffic route 
 
 
 @app.get("/api/v1/health", tags=["System"])
