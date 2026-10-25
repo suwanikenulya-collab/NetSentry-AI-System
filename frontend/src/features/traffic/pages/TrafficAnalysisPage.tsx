@@ -5,12 +5,19 @@ import {
 import {
   Activity,
   ChartNoAxesCombined,
+  CircleAlert,
   Database,
+  LoaderCircle,
   Search,
   ShieldAlert,
   ShieldCheck,
   Upload,
 } from "lucide-react";
+
+import { analyzeTrafficFile } from "../service/trafficApi";
+import type {
+  TrafficSummaryResponse,
+} from "../types/traffic.types";
 
 
 const SUMMARY_CARDS = [
@@ -24,21 +31,21 @@ const SUMMARY_CARDS = [
   {
     label: "Normal traffic",
     value: "—",
-    description: "Awaiting analysis",
+    description: "Awaiting ML analysis",
     icon: ShieldCheck,
     iconStyle: "bg-low/10 text-low",
   },
   {
     label: "Anomalous traffic",
     value: "—",
-    description: "Awaiting analysis",
+    description: "Awaiting ML analysis",
     icon: ShieldAlert,
     iconStyle: "bg-critical/10 text-critical",
   },
   {
     label: "Anomaly rate",
     value: "—",
-    description: "Awaiting analysis",
+    description: "Awaiting ML analysis",
     icon: Activity,
     iconStyle: "bg-medium/10 text-medium",
   },
@@ -61,6 +68,15 @@ export function TrafficAnalysisPage() {
   const [selectedFile, setSelectedFile] =
     useState<File | null>(null);
 
+  const [analysisResult, setAnalysisResult] =
+    useState<TrafficSummaryResponse | null>(null);
+
+  const [isAnalyzing, setIsAnalyzing] =
+    useState(false);
+
+  const [errorMessage, setErrorMessage] =
+    useState<string | null>(null);
+
 
   function handleFileChange(
     event: ChangeEvent<HTMLInputElement>,
@@ -69,6 +85,41 @@ export function TrafficAnalysisPage() {
       event.target.files?.[0] ?? null;
 
     setSelectedFile(file);
+
+    // Remove the previous result when a new file is chosen.
+    setAnalysisResult(null);
+    setErrorMessage(null);
+  }
+
+
+  async function handleAnalyze() {
+    if (!selectedFile) {
+      setErrorMessage(
+        "Please choose a CSV file before starting the analysis.",
+      );
+
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setErrorMessage(null);
+    setAnalysisResult(null);
+
+    try {
+      const result =
+        await analyzeTrafficFile(selectedFile);
+
+      setAnalysisResult(result);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "The traffic dataset could not be analyzed.";
+
+      setErrorMessage(message);
+    } finally {
+      setIsAnalyzing(false);
+    }
   }
 
 
@@ -132,68 +183,131 @@ export function TrafficAnalysisPage() {
       </section>
 
       <section className="rounded-2xl border border-primary/30 bg-primary/5 p-6">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <ChartNoAxesCombined
-                className="h-6 w-6"
-                aria-hidden="true"
-              />
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <ChartNoAxesCombined
+                  className="h-6 w-6"
+                  aria-hidden="true"
+                />
+              </div>
+
+              <div>
+                <h2 className="font-semibold text-foreground">
+                  {analysisResult
+                    ? "Analysis completed"
+                    : selectedFile
+                      ? "Dataset selected"
+                      : "No analysis results yet"}
+                </h2>
+
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">
+                  {analysisResult
+                    ? (
+                      `${analysisResult.filename} was successfully `
+                      + "analyzed by the FastAPI backend."
+                    )
+                    : selectedFile
+                      ? (
+                        `${selectedFile.name} is ready to be `
+                        + "sent to the analysis service."
+                      )
+                      : (
+                        "Choose a network-traffic CSV file to "
+                        + "generate a real summary using the "
+                        + "FastAPI backend."
+                      )}
+                </p>
+
+                {selectedFile && (
+                  <div className="mt-3 flex flex-wrap gap-3 text-xs text-subtle">
+                    <span>
+                      File: {selectedFile.name}
+                    </span>
+
+                    <span>
+                      Size:{" "}
+                      {(
+                        selectedFile.size
+                        / 1024
+                      ).toFixed(2)}{" "}
+                      KB
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div>
-              <h2 className="font-semibold text-foreground">
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <label className="inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border border-border-strong bg-surface px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-surface-hover">
+                <Upload
+                  className="h-4 w-4"
+                  aria-hidden="true"
+                />
+
                 {selectedFile
-                  ? "Dataset selected"
-                  : "No analysis results yet"}
-              </h2>
+                  ? "Change CSV"
+                  : "Choose CSV"}
 
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">
-                {selectedFile
-                  ? `${selectedFile.name} is ready to be analyzed.`
-                  : (
-                    "Choose a network-traffic CSV file to "
-                    + "generate a real summary using the "
-                    + "FastAPI backend."
-                  )}
-              </p>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={handleFileChange}
+                  className="sr-only"
+                />
+              </label>
 
-              {selectedFile && (
-                <div className="mt-3 flex flex-wrap gap-3 text-xs text-subtle">
-                  <span>
-                    File: {selectedFile.name}
-                  </span>
+              <button
+                type="button"
+                onClick={() => void handleAnalyze()}
+                disabled={!selectedFile || isAnalyzing}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isAnalyzing ? (
+                  <>
+                    <LoaderCircle
+                      className="h-4 w-4 animate-spin"
+                      aria-hidden="true"
+                    />
 
-                  <span>
-                    Size:{" "}
-                    {(
-                      selectedFile.size
-                      / 1024
-                    ).toFixed(2)}{" "}
-                    KB
-                  </span>
-                </div>
-              )}
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <ChartNoAxesCombined
+                      className="h-4 w-4"
+                      aria-hidden="true"
+                    />
+
+                    Analyze dataset
+                  </>
+                )}
+              </button>
             </div>
           </div>
 
-          <label className="inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:opacity-90">
-            <Upload
-              className="h-4 w-4"
-              aria-hidden="true"
-            />
+          {errorMessage && (
+            <div
+              role="alert"
+              className="flex items-start gap-3 rounded-xl border border-critical/30 bg-critical/10 p-4 text-sm text-critical"
+            >
+              <CircleAlert
+                className="mt-0.5 h-5 w-5 shrink-0"
+                aria-hidden="true"
+              />
 
-            {selectedFile
-              ? "Change CSV"
-              : "Choose CSV"}
+              <p>{errorMessage}</p>
+            </div>
+          )}
 
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              onChange={handleFileChange}
-              className="sr-only"
-            />
-          </label>
+          {analysisResult && (
+            <div className="rounded-xl border border-low/30 bg-low/10 p-4 text-sm text-low">
+              The backend successfully analyzed{" "}
+              {analysisResult.total_connections.toLocaleString()}{" "}
+              network connections.
+            </div>
+          )}
         </div>
       </section>
 
