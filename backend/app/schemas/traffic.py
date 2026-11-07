@@ -1,3 +1,5 @@
+#The traffic-records API will take the valid CSV data and make its individual network connections available to the frontend.
+
 from datetime import datetime
 
 from pydantic import BaseModel, Field
@@ -11,6 +13,27 @@ class ProtocolCount(BaseModel):
 class SourceIpActivity(BaseModel):
     ip_address: str
     connections: int = Field(ge=0)
+
+
+class TrafficRecord(BaseModel):
+    timestamp: datetime
+
+    src_ip: str
+    dst_ip: str
+
+    src_port: int = Field(
+        ge=0,
+        le=65535,
+    )
+    dst_port: int = Field(
+        ge=0,
+        le=65535,
+    )
+
+    protocol: str
+    duration: float = Field(ge=0)
+    pkt_count: int = Field(ge=0)
+    bytes: int = Field(ge=0)
 
 
 class TrafficSummaryResponse(BaseModel):
@@ -27,3 +50,7 @@ class TrafficSummaryResponse(BaseModel):
 
     protocol_counts: list[ProtocolCount]
     top_source_ips: list[SourceIpActivity]
+
+    records: list[TrafficRecord] = Field(
+        default_factory=list,
+    )
