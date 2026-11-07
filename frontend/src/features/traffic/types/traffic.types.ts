@@ -8,6 +8,21 @@ export interface SourceIpActivity {
   connections: number;
 }
 
+export interface TrafficRecord {
+  timestamp: string;
+
+  src_ip: string;
+  dst_ip: string;
+
+  src_port: number;
+  dst_port: number;
+
+  protocol: string;
+  duration: number;
+  pkt_count: number;
+  bytes: number;
+}
+
 export interface TrafficSummaryResponse {
   filename: string;
 
@@ -22,4 +37,6 @@ export interface TrafficSummaryResponse {
 
   protocol_counts: ProtocolCount[];
   top_source_ips: SourceIpActivity[];
+
+  records: TrafficRecord[];
 }

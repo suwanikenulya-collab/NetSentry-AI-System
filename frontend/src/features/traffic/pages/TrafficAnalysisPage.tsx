@@ -6,11 +6,10 @@ import {
   Activity,
   ChartNoAxesCombined,
   CircleAlert,
+  Clock3,
   Database,
   LoaderCircle,
   Search,
-  ShieldAlert,
-  ShieldCheck,
   Upload,
 } from "lucide-react";
 
@@ -20,48 +19,28 @@ import type {
 } from "../types/traffic.types";
 
 
-const SUMMARY_CARDS = [
-  {
-    label: "Total records",
-    value: "—",
-    description: "No dataset analyzed",
-    icon: Database,
-    iconStyle: "bg-primary/10 text-primary",
-  },
-  {
-    label: "Normal traffic",
-    value: "—",
-    description: "Awaiting ML analysis",
-    icon: ShieldCheck,
-    iconStyle: "bg-low/10 text-low",
-  },
-  {
-    label: "Anomalous traffic",
-    value: "—",
-    description: "Awaiting ML analysis",
-    icon: ShieldAlert,
-    iconStyle: "bg-critical/10 text-critical",
-  },
-  {
-    label: "Anomaly rate",
-    value: "—",
-    description: "Awaiting ML analysis",
-    icon: Activity,
-    iconStyle: "bg-medium/10 text-medium",
-  },
-];
-
-
 const TABLE_COLUMNS = [
   "Timestamp",
   "Source IP",
   "Destination IP",
+  "Source port",
+  "Destination port",
   "Protocol",
   "Packets",
   "Bytes",
-  "Anomaly score",
-  "Status",
+  "Duration",
 ];
+
+
+function formatTimestamp(timestamp: string) {
+  const date = new Date(timestamp);
+
+  if (Number.isNaN(date.getTime())) {
+    return timestamp;
+  }
+
+  return date.toLocaleString();
+}
 
 
 export function TrafficAnalysisPage() {
@@ -77,6 +56,9 @@ export function TrafficAnalysisPage() {
   const [errorMessage, setErrorMessage] =
     useState<string | null>(null);
 
+  const [searchTerm, setSearchTerm] =
+    useState("");
+
 
   function handleFileChange(
     event: ChangeEvent<HTMLInputElement>,
@@ -85,10 +67,9 @@ export function TrafficAnalysisPage() {
       event.target.files?.[0] ?? null;
 
     setSelectedFile(file);
-
-    // Remove the previous result when a new file is chosen.
     setAnalysisResult(null);
     setErrorMessage(null);
+    setSearchTerm("");
   }
 
 
@@ -104,6 +85,7 @@ export function TrafficAnalysisPage() {
     setIsAnalyzing(true);
     setErrorMessage(null);
     setAnalysisResult(null);
+    setSearchTerm("");
 
     try {
       const result =
@@ -123,6 +105,87 @@ export function TrafficAnalysisPage() {
   }
 
 
+  const records =
+    analysisResult?.records ?? [];
+
+  const normalizedSearchTerm =
+    searchTerm.trim().toLowerCase();
+
+  const filteredRecords = records.filter(
+    (record) => {
+      if (!normalizedSearchTerm) {
+        return true;
+      }
+
+      const searchableValues = [
+        record.timestamp,
+        record.src_ip,
+        record.dst_ip,
+        record.src_port,
+        record.dst_port,
+        record.protocol,
+        record.pkt_count,
+        record.bytes,
+        record.duration,
+      ];
+
+      return searchableValues.some((value) =>
+        String(value)
+          .toLowerCase()
+          .includes(normalizedSearchTerm),
+      );
+    },
+  );
+
+
+  const summaryCards = [
+    {
+      label: "Total connections",
+      value: analysisResult
+        ? analysisResult.total_connections.toLocaleString()
+        : "--",
+      description: analysisResult
+        ? "Traffic records analyzed"
+        : "No dataset analyzed",
+      icon: Database,
+      iconStyle: "bg-primary/10 text-primary",
+    },
+    {
+      label: "Total packets",
+      value: analysisResult
+        ? analysisResult.total_packets.toLocaleString()
+        : "--",
+      description: analysisResult
+        ? "Packets in the dataset"
+        : "Awaiting analysis",
+      icon: Activity,
+      iconStyle: "bg-low/10 text-low",
+    },
+    {
+      label: "Total bytes",
+      value: analysisResult
+        ? analysisResult.total_bytes.toLocaleString()
+        : "--",
+      description: analysisResult
+        ? "Bytes transferred"
+        : "Awaiting analysis",
+      icon: ChartNoAxesCombined,
+      iconStyle: "bg-medium/10 text-medium",
+    },
+    {
+      label: "Average duration",
+      value: analysisResult
+        ? `${analysisResult.average_duration_seconds.toFixed(2)}s`
+        : "--",
+      description: analysisResult
+        ? "Average connection duration"
+        : "Awaiting analysis",
+      icon: Clock3,
+      iconStyle: "bg-critical/10 text-critical",
+    },
+  ];
+
+
   return (
     <main className="space-y-6">
       <header>
@@ -140,8 +203,9 @@ export function TrafficAnalysisPage() {
         </p>
       </header>
 
+
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {SUMMARY_CARDS.map(
+        {summaryCards.map(
           ({
             label,
             value,
@@ -182,6 +246,7 @@ export function TrafficAnalysisPage() {
         )}
       </section>
 
+
       <section className="rounded-2xl border border-primary/30 bg-primary/5 p-6">
         <div className="flex flex-col gap-5">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
@@ -215,8 +280,7 @@ export function TrafficAnalysisPage() {
                       )
                       : (
                         "Choose a network-traffic CSV file to "
-                        + "generate a real summary using the "
-                        + "FastAPI backend."
+                        + "generate a real analysis."
                       )}
                 </p>
 
@@ -229,8 +293,7 @@ export function TrafficAnalysisPage() {
                     <span>
                       Size:{" "}
                       {(
-                        selectedFile.size
-                        / 1024
+                        selectedFile.size / 1024
                       ).toFixed(2)}{" "}
                       KB
                     </span>
@@ -311,63 +374,96 @@ export function TrafficAnalysisPage() {
         </div>
       </section>
 
+
       <section className="grid gap-6 xl:grid-cols-2">
         <article className="rounded-2xl border border-border bg-surface p-6">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">
-              Traffic classification
-            </h2>
+          <h2 className="text-lg font-semibold text-foreground">
+            Top source IP addresses
+          </h2>
 
-            <p className="mt-1 text-sm text-muted">
-              Normal and anomalous network-flow distribution.
-            </p>
-          </div>
+          <p className="mt-1 text-sm text-muted">
+            Devices that created the most network connections.
+          </p>
 
-          <div className="mt-6 flex min-h-64 flex-col items-center justify-center rounded-xl border border-dashed border-border-strong bg-background p-8 text-center">
-            <ChartNoAxesCombined
-              className="h-10 w-10 text-subtle"
-              aria-hidden="true"
-            />
+          {analysisResult
+          && analysisResult.top_source_ips.length > 0 ? (
+            <div className="mt-6 space-y-3">
+              {analysisResult.top_source_ips.map(
+                (source, index) => (
+                  <div
+                    key={source.ip_address}
+                    className="flex items-center justify-between rounded-xl border border-border bg-background p-4"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-sm font-semibold text-primary">
+                        {index + 1}
+                      </span>
 
-            <p className="mt-4 font-medium text-foreground">
-              Classification chart unavailable
-            </p>
+                      <span className="font-mono text-sm text-foreground">
+                        {source.ip_address}
+                      </span>
+                    </div>
 
-            <p className="mt-2 max-w-sm text-sm text-muted">
-              This chart will become available after the
-              anomaly-detection model is implemented.
-            </p>
-          </div>
+                    <span className="text-sm font-semibold text-foreground">
+                      {source.connections} connections
+                    </span>
+                  </div>
+                ),
+              )}
+            </div>
+          ) : (
+            <div className="mt-6 flex min-h-52 flex-col items-center justify-center rounded-xl border border-dashed border-border-strong bg-background p-8 text-center">
+              <Database className="h-10 w-10 text-subtle" />
+
+              <p className="mt-4 text-sm text-muted">
+                Analyze a dataset to view source IP activity.
+              </p>
+            </div>
+          )}
         </article>
+
 
         <article className="rounded-2xl border border-border bg-surface p-6">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">
-              Protocol distribution
-            </h2>
+          <h2 className="text-lg font-semibold text-foreground">
+            Protocol distribution
+          </h2>
 
-            <p className="mt-1 text-sm text-muted">
-              Distribution of traffic across network protocols.
-            </p>
-          </div>
+          <p className="mt-1 text-sm text-muted">
+            Number of connections using each network protocol.
+          </p>
 
-          <div className="mt-6 flex min-h-64 flex-col items-center justify-center rounded-xl border border-dashed border-border-strong bg-background p-8 text-center">
-            <Activity
-              className="h-10 w-10 text-subtle"
-              aria-hidden="true"
-            />
+          {analysisResult
+          && analysisResult.protocol_counts.length > 0 ? (
+            <div className="mt-6 space-y-3">
+              {analysisResult.protocol_counts.map(
+                (protocol) => (
+                  <div
+                    key={protocol.protocol}
+                    className="flex items-center justify-between rounded-xl border border-border bg-background p-4"
+                  >
+                    <span className="font-semibold text-primary">
+                      {protocol.protocol}
+                    </span>
 
-            <p className="mt-4 font-medium text-foreground">
-              Protocol data unavailable
-            </p>
+                    <span className="text-sm text-foreground">
+                      {protocol.connections} connections
+                    </span>
+                  </div>
+                ),
+              )}
+            </div>
+          ) : (
+            <div className="mt-6 flex min-h-52 flex-col items-center justify-center rounded-xl border border-dashed border-border-strong bg-background p-8 text-center">
+              <Activity className="h-10 w-10 text-subtle" />
 
-            <p className="mt-2 max-w-sm text-sm text-muted">
-              Protocol statistics will appear after the selected
-              dataset has been analyzed.
-            </p>
-          </div>
+              <p className="mt-4 text-sm text-muted">
+                Analyze a dataset to view protocol statistics.
+              </p>
+            </div>
+          )}
         </article>
       </section>
+
 
       <section className="overflow-hidden rounded-2xl border border-border bg-surface">
         <div className="flex flex-col gap-4 border-b border-border p-6 sm:flex-row sm:items-center sm:justify-between">
@@ -377,8 +473,8 @@ export function TrafficAnalysisPage() {
             </h2>
 
             <p className="mt-1 text-sm text-muted">
-              Inspect individual network-flow records and their
-              analysis status.
+              Inspect individual network-flow records returned
+              by the FastAPI backend.
             </p>
           </div>
 
@@ -390,8 +486,12 @@ export function TrafficAnalysisPage() {
 
             <input
               type="search"
+              value={searchTerm}
+              onChange={(event) =>
+                setSearchTerm(event.target.value)
+              }
               placeholder="Search traffic records"
-              disabled
+              disabled={records.length === 0}
               className="w-full rounded-lg border border-border bg-background py-2.5 pl-10 pr-3 text-sm text-foreground outline-none placeholder:text-subtle disabled:cursor-not-allowed disabled:opacity-60"
             />
           </div>
@@ -412,24 +512,90 @@ export function TrafficAnalysisPage() {
                 ))}
               </tr>
             </thead>
+
+            <tbody className="divide-y divide-border">
+              {filteredRecords.map(
+                (record, index) => (
+                  <tr
+                    key={
+                      `${record.timestamp}-${record.src_ip}-${index}`
+                    }
+                    className="transition hover:bg-surface-hover"
+                  >
+                    <td className="whitespace-nowrap px-5 py-4 text-sm text-muted">
+                      {formatTimestamp(record.timestamp)}
+                    </td>
+
+                    <td className="whitespace-nowrap px-5 py-4 font-mono text-sm text-foreground">
+                      {record.src_ip}
+                    </td>
+
+                    <td className="whitespace-nowrap px-5 py-4 font-mono text-sm text-foreground">
+                      {record.dst_ip}
+                    </td>
+
+                    <td className="px-5 py-4 text-sm text-muted">
+                      {record.src_port}
+                    </td>
+
+                    <td className="px-5 py-4 text-sm text-muted">
+                      {record.dst_port}
+                    </td>
+
+                    <td className="px-5 py-4">
+                      <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                        {record.protocol}
+                      </span>
+                    </td>
+
+                    <td className="px-5 py-4 text-sm text-muted">
+                      {record.pkt_count.toLocaleString()}
+                    </td>
+
+                    <td className="px-5 py-4 text-sm text-muted">
+                      {record.bytes.toLocaleString()}
+                    </td>
+
+                    <td className="px-5 py-4 text-sm text-muted">
+                      {record.duration.toFixed(2)}s
+                    </td>
+                  </tr>
+                ),
+              )}
+            </tbody>
           </table>
         </div>
 
-        <div className="flex min-h-52 flex-col items-center justify-center border-t border-border p-8 text-center">
-          <Database
-            className="h-10 w-10 text-subtle"
-            aria-hidden="true"
-          />
+        {filteredRecords.length === 0 && (
+          <div className="flex min-h-52 flex-col items-center justify-center border-t border-border p-8 text-center">
+            <Database
+              className="h-10 w-10 text-subtle"
+              aria-hidden="true"
+            />
 
-          <p className="mt-4 font-medium text-foreground">
-            No traffic records
-          </p>
+            <p className="mt-4 font-medium text-foreground">
+              {records.length > 0
+                ? "No matching records"
+                : "No traffic records"}
+            </p>
 
-          <p className="mt-2 max-w-md text-sm text-muted">
-            Individual records will appear after the backend
-            provides record-level traffic results.
-          </p>
-        </div>
+            <p className="mt-2 max-w-md text-sm text-muted">
+              {records.length > 0
+                ? "Try searching with a different value."
+                : (
+                  "Choose a CSV file and run the analysis "
+                  + "to display its network records."
+                )}
+            </p>
+          </div>
+        )}
+
+        {records.length > 0 && (
+          <div className="border-t border-border px-6 py-3 text-xs text-subtle">
+            Showing {filteredRecords.length} of{" "}
+            {records.length} records
+          </div>
+        )}
       </section>
     </main>
   );
