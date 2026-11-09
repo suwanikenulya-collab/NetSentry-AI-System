@@ -2,6 +2,7 @@ import csv
 from collections import Counter
 from datetime import datetime
 from io import StringIO
+from typing import Literal
 
 from app.schemas.traffic import (
     ProtocolCount,
@@ -11,13 +12,89 @@ from app.schemas.traffic import (
 )
 
 
+# A record needs at least this score to be anomalous.
+ANOMALY_THRESHOLD = 50
+
+# These services are commonly targeted during attacks.
+SUSPICIOUS_DESTINATION_PORTS = {
+    23,    # Telnet
+    445,   # SMB
+    3389,  # Remote Desktop
+}
+
+
+def detect_anomaly(
+    protocol: str,
+    destination_port: int,
+    duration: float,
+    packet_count: int,
+    byte_count: int,
+) -> tuple[
+    int,
+    Literal["normal", "anomalous"],
+    list[str],
+]:
+    score = 0
+    reasons: list[str] = []
+
+    # Rule 1: Very large packet count.
+    if packet_count >= 1000:
+        score += 30
+        reasons.append(
+            "Unusually high packet count."
+        )
+
+    # Rule 2: Very large amount of transferred data.
+    if byte_count >= 1_000_000:
+        score += 30
+        reasons.append(
+            "Unusually high byte transfer."
+        )
+
+    # Rule 3: Very long connection.
+    if duration >= 300:
+        score += 20
+        reasons.append(
+            "Unusually long connection duration."
+        )
+
+    # Rule 4: Connection to a commonly attacked port.
+    if destination_port in SUSPICIOUS_DESTINATION_PORTS:
+        score += 20
+        reasons.append(
+            "Traffic targets a commonly abused service port."
+        )
+
+    # Rule 5: Large ICMP traffic can indicate ping flooding.
+    if protocol == "ICMP" and packet_count >= 100:
+        score += 30
+        reasons.append(
+            "High-volume ICMP traffic detected."
+        )
+
+    # The score must remain between 0 and 100.
+    score = min(score, 100)
+
+    status: Literal["normal", "anomalous"]
+
+    if score >= ANOMALY_THRESHOLD:
+        status = "anomalous"
+    else:
+        status = "normal"
+
+    return score, status, reasons
+
+
 def analyze_traffic(
     filename: str,
     content: bytes,
 ) -> TrafficSummaryResponse:
-    text = content.decode("utf-8-sig")
+    text_content = content.decode("utf-8-sig")
 
-    reader = csv.DictReader(StringIO(text))
+    reader = csv.DictReader(
+        StringIO(text_content)
+    )
+
     rows = list(reader)
 
     if not rows:
@@ -25,49 +102,91 @@ def analyze_traffic(
             "The dataset must contain at least one data row."
         )
 
+    total_packets = 0
+    total_bytes = 0
+    total_duration = 0.0
+
+    timestamps: list[datetime] = []
     records: list[TrafficRecord] = []
 
-    # Convert every CSV row into a TrafficRecord.
+    protocol_counter: Counter[str] = Counter()
+    source_ip_counter: Counter[str] = Counter()
+
+    normal_connections = 0
+    anomalous_connections = 0
+
     for row in rows:
+        timestamp = datetime.fromisoformat(
+            row["timestamp"].strip()
+        )
+
+        source_ip = row["src_ip"].strip()
+        destination_ip = row["dst_ip"].strip()
+
+        source_port = int(
+            row["src_port"].strip()
+        )
+        destination_port = int(
+            row["dst_port"].strip()
+        )
+
+        protocol = (
+            row["protocol"]
+            .strip()
+            .upper()
+        )
+
+        duration = float(
+            row["duration"].strip()
+        )
+        packet_count = int(
+            row["pkt_count"].strip()
+        )
+        byte_count = int(
+            row["bytes"].strip()
+        )
+
+        anomaly_score, status, reasons = (
+            detect_anomaly(
+                protocol=protocol,
+                destination_port=destination_port,
+                duration=duration,
+                packet_count=packet_count,
+                byte_count=byte_count,
+            )
+        )
+
         record = TrafficRecord(
-            timestamp=datetime.fromisoformat(
-                row["timestamp"].strip()
-            ),
-            src_ip=row["src_ip"].strip(),
-            dst_ip=row["dst_ip"].strip(),
-            src_port=int(row["src_port"]),
-            dst_port=int(row["dst_port"]),
-            protocol=row["protocol"].strip().upper(),
-            duration=float(row["duration"]),
-            pkt_count=int(row["pkt_count"]),
-            bytes=int(row["bytes"]),
+            timestamp=timestamp,
+            src_ip=source_ip,
+            dst_ip=destination_ip,
+            src_port=source_port,
+            dst_port=destination_port,
+            protocol=protocol,
+            duration=duration,
+            pkt_count=packet_count,
+            bytes=byte_count,
+            anomaly_score=anomaly_score,
+            status=status,
+            anomaly_reasons=reasons,
         )
 
         records.append(record)
+        timestamps.append(timestamp)
 
-    # Calculate basic totals.
+        total_packets += packet_count
+        total_bytes += byte_count
+        total_duration += duration
+
+        protocol_counter[protocol] += 1
+        source_ip_counter[source_ip] += 1
+
+        if status == "anomalous":
+            anomalous_connections += 1
+        else:
+            normal_connections += 1
+
     total_connections = len(records)
-
-    total_packets = sum(
-        record.pkt_count for record in records
-    )
-
-    total_bytes = sum(
-        record.bytes for record in records
-    )
-
-    average_duration = sum(
-        record.duration for record in records
-    ) / total_connections
-
-    timestamps = [
-        record.timestamp for record in records
-    ]
-
-    # Count the different protocols.
-    protocol_counter = Counter(
-        record.protocol for record in records
-    )
 
     protocol_counts = [
         ProtocolCount(
@@ -78,11 +197,6 @@ def analyze_traffic(
         in sorted(protocol_counter.items())
     ]
 
-    # Find the five most active source IP addresses.
-    source_ip_counter = Counter(
-        record.src_ip for record in records
-    )
-
     top_source_ips = [
         SourceIpActivity(
             ip_address=ip_address,
@@ -92,40 +206,30 @@ def analyze_traffic(
         in source_ip_counter.most_common(5)
     ]
 
+    anomaly_rate_percentage = round(
+        (
+            anomalous_connections
+            / total_connections
+        ) * 100,
+        2,
+    )
+
     return TrafficSummaryResponse(
         filename=filename,
         total_connections=total_connections,
         total_packets=total_packets,
         total_bytes=total_bytes,
-        average_duration_seconds=average_duration,
+        average_duration_seconds=(
+            total_duration / total_connections
+        ),
         start_time=min(timestamps),
         end_time=max(timestamps),
         protocol_counts=protocol_counts,
         top_source_ips=top_source_ips,
+        normal_connections=normal_connections,
+        anomalous_connections=anomalous_connections,
+        anomaly_rate_percentage=(
+            anomaly_rate_percentage
+        ),
         records=records,
     )
-def test_traffic_records_are_returned() -> None:
-    content = (
-        "timestamp,src_ip,dst_ip,src_port,dst_port,"
-        "protocol,duration,pkt_count,bytes\n"
-        "2026-09-06T10:30:00,192.168.1.10,"
-        "203.0.113.20,51520,443,TCP,2.45,18,14560\n"
-    ).encode("utf-8")
-
-    result = analyze_traffic(
-        filename="traffic.csv",
-        content=content,
-    )
-
-    assert len(result.records) == 1
-
-    record = result.records[0]
-
-    assert record.src_ip == "192.168.1.10"
-    assert record.dst_ip == "203.0.113.20"
-    assert record.src_port == 51520
-    assert record.dst_port == 443
-    assert record.protocol == "TCP"
-    assert record.duration == 2.45
-    assert record.pkt_count == 18
-    assert record.bytes == 14560

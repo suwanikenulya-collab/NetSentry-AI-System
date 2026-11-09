@@ -72,6 +72,87 @@ def test_traffic_summary_is_calculated_correctly() -> None:
     )
     assert result.top_source_ips[0].connections == 2
 
+    assert result.normal_connections == 3
+    assert result.anomalous_connections == 0
+    assert result.anomaly_rate_percentage == 0
+
+    assert len(result.records) == 3
+    assert all(
+        record.status == "normal"
+        for record in result.records
+    )
+
+
+def test_high_volume_traffic_is_anomalous() -> None:
+    content = (
+        CSV_HEADER
+        + "2026-10-18T13:00:00,"
+        "192.168.1.50,"
+        "203.0.113.50,"
+        "52000,"
+        "443,"
+        "TCP,"
+        "10.0,"
+        "1500,"
+        "2000000\n"
+    ).encode("utf-8")
+
+    result = analyze_traffic(
+        filename="high-volume.csv",
+        content=content,
+    )
+
+    record = result.records[0]
+
+    assert record.status == "anomalous"
+    assert record.anomaly_score == 60
+
+    assert record.anomaly_reasons == [
+        "Unusually high packet count.",
+        "Unusually high byte transfer.",
+    ]
+
+    assert result.normal_connections == 0
+    assert result.anomalous_connections == 1
+    assert result.anomaly_rate_percentage == 100
+
+
+def test_mixed_traffic_calculates_anomaly_rate() -> None:
+    content = (
+        CSV_HEADER
+        + "2026-10-18T14:00:00,"
+        "192.168.1.10,"
+        "203.0.113.10,"
+        "51520,"
+        "443,"
+        "TCP,"
+        "2.0,"
+        "10,"
+        "1000\n"
+        + "2026-10-18T14:05:00,"
+        "192.168.1.99,"
+        "203.0.113.99,"
+        "51521,"
+        "443,"
+        "TCP,"
+        "10.0,"
+        "1500,"
+        "2000000\n"
+    ).encode("utf-8")
+
+    result = analyze_traffic(
+        filename="mixed-traffic.csv",
+        content=content,
+    )
+
+    assert result.total_connections == 2
+    assert result.normal_connections == 1
+    assert result.anomalous_connections == 1
+    assert result.anomaly_rate_percentage == 50
+
+    assert result.records[0].status == "normal"
+    assert result.records[1].status == "anomalous"
+
 
 def test_empty_traffic_dataset_is_rejected() -> None:
     content = CSV_HEADER.encode("utf-8")
