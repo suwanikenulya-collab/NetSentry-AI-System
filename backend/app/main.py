@@ -1,3 +1,4 @@
+import os #lets python read settings supplied by render .
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware #import the CORSMiddleware class from the fastapi.middleware.cors module. This middleware is used to handle Cross-Origin Resource Sharing (CORS) in FastAPI applications.
 
@@ -16,12 +17,26 @@ app = FastAPI(
 
 
 # React development-server addresses allowed to call FastAPI.
-FRONTEND_ORIGINS = [
+LOCAL_FRONTEND_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:5174",
     "http://127.0.0.1:5174",
 ]
+
+DEPLOYED_FRONTEND_ORIGINS = [
+    origin.strip().rstrip("/")
+    for origin in os.getenv(
+        "ALLOWED_ORIGINS",
+        "",
+    ).split(",")
+    if origin.strip()
+]
+
+FRONTEND_ORIGINS = (
+    LOCAL_FRONTEND_ORIGINS  #keeps the local development working .
+    + DEPLOYED_FRONTEND_ORIGINS
+)
 
 
 # Give the permitted React origins access to this API.
